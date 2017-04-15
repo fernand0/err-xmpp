@@ -1,0 +1,10 @@
+[Core]
+Name = Xmpp
+Module = xmpp
+
+[Documentation]
+Description = An Err plugin for connecting to XMPP when you are using other backends
+
+[Python]
+Version = 3
+
