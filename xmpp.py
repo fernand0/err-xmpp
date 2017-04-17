@@ -104,8 +104,17 @@ class myXmppBridge(BotPlugin):
         '''
         super(myXmppBridge, self).check_configuration(configuration)
 
+    def callback_mention(self, message, mentioned_people):
+        for identifier in mentioned_people:
+            self.forwardmessage(message.frm, 'User %s has been mentioned' % identifier)
+        if self.bot_identifier in mentioned_people:
+            self.forwardmessage(message.frm, 'Errbot has been mentioned !')
 
     @botcmd
+    def fm(self, msg, args):
+        yield(self.forwardmessage(msg, args))
+
+    @botcmd(admin_only=True)
     def forwardmessage(self, msg, args):
         hangupargs = argparse.Namespace()
         # We need to be able to locate the conversation
@@ -128,7 +137,8 @@ class myXmppBridge(BotPlugin):
         finally:
             loop.close()
         # We are not reading the reply yet
-        #output = yield from get_conversation(hangupargs.conversation_id)
+        yield from get_conversation((hangupargs.conversation_id,3))
+
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO,
                         format='%(levelname)-8s %(message)s',
