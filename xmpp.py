@@ -5,6 +5,7 @@ from sleekxmpp.exceptions import IqError, IqTimeout
 import logging
 import asyncio
 import argparse
+import subprocess
 
 _logger = logging.getLogger(__name__)
 
@@ -16,65 +17,118 @@ import asyncio
 import hangups
 
 from common import run_example
-
-
-@asyncio.coroutine
-def send_message(client, args):
-    request = hangups.hangouts_pb2.SendChatMessageRequest(
-        request_header=client.get_request_header(),
-        event_request_header=hangups.hangouts_pb2.EventRequestHeader(
-            conversation_id=hangups.hangouts_pb2.ConversationId(
-                id=args.conversation_id
-            ),
-            client_generated_id=client.get_client_generated_id(),
-        ),
-        message_content=hangups.hangouts_pb2.MessageContent(
-            segment=[
-                hangups.ChatMessageSegment(args.message_text).serialize()
-            ],
-        ),
-    )
-    yield from client.send_chat_message(request)
+from cliHangups import *
 
 @asyncio.coroutine
-def get_conversation(get_info):
-    """Get a conversation by id"""
-    conversation_id = get_info[0]
-    max_events = get_info[1]
-    conversation = conv_list.get(conversation_id)
-    # event0 = conversation._events[0]
-    events = yield from conversation.get_events(None, max_events)
-    event0 = events[-1]
-    events = yield from conversation.get_events(event0.id_, max_events)
-    events.append(event0)
-    output = ""
-    for event in events:
-        ev = Message.from_conversation_event(conversation, event, None)
-        if ev is not None:
-            output += str(ev) + "\n"
-    return output
+def sendMessage(message):
+    dirs = appdirs.AppDirs('hangups_cli', 'hangups_cli')
+    default_log_path = os.path.join(dirs.user_data_dir, 'hangups.log')
+    default_token_path = os.path.join(dirs.user_data_dir, 'refresh_token.txt')
+    conversation_path = os.path.join(dirs.user_data_dir, 'conversation_list.txt')
+    user_path = os.path.join(dirs.user_data_dir, 'user_list.txt')
 
-@asyncio.coroutine
-def _async_main(example_coroutine, client, args):
-    """Run the example coroutine."""
-    # Spawn a task for hangups to run in parallel with the example coroutine.
-    task = asyncio.async(client.connect())
-
-    # Wait for hangups to either finish connecting or raise an exception.
-    on_connect = asyncio.Future()
-    client.on_connect.add_observer(lambda: on_connect.set_result(None))
-    done, _ = yield from asyncio.wait(
-        (on_connect, task), return_when=asyncio.FIRST_COMPLETED
-    )
-    yield from asyncio.gather(*done)
-
-    # Run the example coroutine. Afterwards, disconnect hangups gracefully and
-    # yield the hangups task to handle any exceptions.
+    conversation_map = {}
     try:
-        yield from example_coroutine(client, args)
-    finally:
-        yield from client.disconnect()
-        yield from task
+        with open(conversation_path, 'r') as conv_file:
+            for line in conv_file.readlines():
+                split = line.split(':')
+                key = split[1].strip().replace(" ", "_")
+                value = split[0].strip()
+                conversation_map[key] = value
+    except FileNotFoundError as err:
+        pass
+
+    user_map = {}
+    try:
+        with open(user_path, 'r') as user_file:
+            for line in user_file.readlines():
+                split = line.split(':')
+                key = split[1].strip().replace(" ", "_")
+                value = split[0].strip()
+                user_map[key] = value
+    except FileNotFoundError as err:
+        pass
+
+    conversation_choices = sorted(list(conversation_map.keys()),
+                                  key=lambda x:'zzz' + x if x[:7] == "Unknown" else x)
+    user_choices = sorted(list(user_map.keys()),
+                          key=lambda x:'zzz' + x if x[:7] == "Unknown" else x)
+
+    command = []
+    command.append('send')
+    command.append(['conversation', conversation_map['fernand0movilizado_Bot']])
+    command.append(['message', message])
+
+    for path in ['', default_token_path, conversation_path, user_path]:
+        directory = os.path.dirname(path)
+        if directory and not os.path.isdir(directory):
+            try:
+                os.makedirs(directory)
+            except OSError as err:
+                sys.exit('Failed to create directory: {}'.format(err))
+
+    # Setup logging
+    log_level = logging.WARNING
+    logging.basicConfig(filename='', level=log_level, format=LOG_FORMAT)
+    # asyncio's debugging logs are VERY noisy, so adjust the log level
+    logging.getLogger('asyncio').setLevel(logging.WARNING)
+
+    unused_cli = Cli(default_token_path, conversation_path, user_path, command, '')
+
+@asyncio.coroutine
+def getMessage():
+    dirs = appdirs.AppDirs('hangups_cli', 'hangups_cli')
+    default_log_path = os.path.join(dirs.user_data_dir, 'hangups.log')
+    default_token_path = os.path.join(dirs.user_data_dir, 'refresh_token.txt')
+    conversation_path = os.path.join(dirs.user_data_dir, 'conversation_list.txt')
+    user_path = os.path.join(dirs.user_data_dir, 'user_list.txt')
+
+    conversation_map = {}
+    try:
+        with open(conversation_path, 'r') as conv_file:
+            for line in conv_file.readlines():
+                split = line.split(':')
+                key = split[1].strip().replace(" ", "_")
+                value = split[0].strip()
+                conversation_map[key] = value
+    except FileNotFoundError as err:
+        pass
+
+    user_map = {}
+    try:
+        with open(user_path, 'r') as user_file:
+            for line in user_file.readlines():
+                split = line.split(':')
+                key = split[1].strip().replace(" ", "_")
+                value = split[0].strip()
+                user_map[key] = value
+    except FileNotFoundError as err:
+        pass
+
+    conversation_choices = sorted(list(conversation_map.keys()),
+                                  key=lambda x:'zzz' + x if x[:7] == "Unknown" else x)
+    user_choices = sorted(list(user_map.keys()),
+                          key=lambda x:'zzz' + x if x[:7] == "Unknown" else x)
+
+    command = []
+    command.append('get')
+    command.append(['conversation', conversation_map['fernand0movilizado_Bot'], 5])
+
+    for path in ['', default_token_path, conversation_path, user_path]:
+        directory = os.path.dirname(path)
+        if directory and not os.path.isdir(directory):
+            try:
+                os.makedirs(directory)
+            except OSError as err:
+                sys.exit('Failed to create directory: {}'.format(err))
+
+    # Setup logging
+    log_level = logging.WARNING
+    logging.basicConfig(filename='', level=log_level, format=LOG_FORMAT)
+    # asyncio's debugging logs are VERY noisy, so adjust the log level
+    logging.getLogger('asyncio').setLevel(logging.WARNING)
+
+    unused_cli = Cli(default_token_path, conversation_path, user_path, command, '')
 
 class myXmppBridge(BotPlugin):
     """ 
@@ -108,6 +162,7 @@ class myXmppBridge(BotPlugin):
         for identifier in mentioned_people:
             self.forwardmessage(message.frm, 'User %s has been mentioned' % identifier)
         if self.bot_identifier in mentioned_people:
+            yield('hola %s'%message.frm)
             self.forwardmessage(message.frm, 'Errbot has been mentioned !')
 
     @botcmd
@@ -116,29 +171,72 @@ class myXmppBridge(BotPlugin):
 
     @botcmd(admin_only=True)
     def forwardmessage(self, msg, args):
-        hangupargs = argparse.Namespace()
-        # We need to be able to locate the conversation
-        # Arguments: (Namespace(conversation_id='UgybUd1gf4E4TwB5VVl4AaABAQ', debug=False, message_text='aeiou a e' , token_path='/home/debian/.cache/hangups/refresh_token.txt'),)
-        hangupargs.conversation_id='UgybUd1gf4E4TwB5VVl4AaABAQ'
-        hangupargs.debug=False
-        hangupargs.message_text=args
-        hangupargs.token_path='/home/debian/.cache/hangups/refresh_token.txt'
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        cookies = hangups.auth.get_auth_stdin(hangupargs.token_path)
-        client = hangups.Client(cookies)
-        task = asyncio.async(_async_main(send_message, client, hangupargs))
-        loop = asyncio.get_event_loop()
-        try:
-            loop.run_until_complete(task)
-        except KeyboardInterrupt:
-            task.cancel()
-            loop.run_forever()
-        finally:
-            loop.close()
-        # We are not reading the reply yet
-        yield from get_conversation((hangupargs.conversation_id,3))
+        arg1='hangups_cli  send -c fernand0movilizado_Bot -m %s'%args
+        arg2='hangups_cli  get -n 5 -c fernand0movilizado_Bot'
+        p=subprocess.Popen(arg1,shell=True,stdout=subprocess.PIPE)
+        data = p.communicate()
+        # We need to wait. We need to select the adequate part of the reply
+        p=subprocess.Popen(arg2,shell=True,stdout=subprocess.PIPE)
+        data = p.communicate()[0].decode()
+        yield(data)
+        yield(args)
+        yield(data[:data.find(args)])
 
+    @botcmd(admin_only=True)
+    def forwardmessage2(self, msg, args):
+        #loop = asyncio.new_event_loop()
+        #asyncio.set_event_loop(loop)
+        #loop = asyncio.get_event_loop()
+        #task = asyncio.Task(sendMessage(args))
+        #try:
+        #    loop.run_until_complete(task)
+        #except KeyboardInterrupt:
+        #    task.cancel()
+        #    loop.run_forever()
+        #finally:
+        #    loop.close()
+        sendMessage(args)
+        yield("respuesta")
+        getMessage()
+        yield("fin")
+ 
+        #hangupargs = argparse.Namespace()
+        ## We need to be able to locate the conversation
+        ## Arguments: (Namespace(conversation_id='UgybUd1gf4E4TwB5VVl4AaABAQ', debug=False, message_text='aeiou a e' , token_path='/home/debian/.cache/hangups/refresh_token.txt'),)
+        #hangupargs.conversation_id='UgybUd1gf4E4TwB5VVl4AaABAQ'
+        #hangupargs.debug=False
+        #hangupargs.message_text=args
+        #hangupargs.token_path='/home/debian/.cache/hangups/refresh_token.txt'
+        #loop = asyncio.new_event_loop()
+        #asyncio.set_event_loop(loop)
+        #cookies = hangups.auth.get_auth_stdin(hangupargs.token_path)
+        #client = hangups.Client(cookies)
+        #task = asyncio.async(_async_main(send_message, client, hangupargs))
+        #loop = asyncio.get_event_loop()
+        #try:
+        #    loop.run_until_complete(task)
+        #except KeyboardInterrupt:
+        #    task.cancel()
+        #    loop.run_forever()
+        #finally:
+        #    loop.close()
+        ## We are not reading the reply yet
+
+        #loop = asyncio.new_event_loop()
+        #asyncio.set_event_loop(loop)
+        #cookies = hangups.auth.get_auth_stdin(hangupargs.token_path)
+        #client = hangups.Client(cookies)
+        #task = asyncio.async(_async_main(sync_recent_conversations, client, hangupargs.conversation_id))
+        #loop = asyncio.get_event_loop()
+        #try:
+        #    loop.run_until_complete(task)
+        #except KeyboardInterrupt:
+        #    task.cancel()
+        #    loop.run_forever()
+        #finally:
+        #    loop.close()
+
+ 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO,
                         format='%(levelname)-8s %(message)s',
